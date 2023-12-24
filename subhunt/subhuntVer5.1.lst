@@ -1,0 +1,1233 @@
+LINE ADDR CONTENTS SOURCE LINE
+  1.              		.EQU KBD_CNTL,  	$000
+  2.              		.EQU KBD_STAT,  	$000
+  3.              		.EQU KBD_DATA,  	$001
+  4.              		.EQU KBD_FLUSH, 	$40
+  5.              
+  6.              		.EQU TIM_CNTL,      	$030
+  7.              		.EQU TIM_STAT,      	$030
+  8.              		.EQU TIM_VALUE,     	$031
+  9.              		.EQU TIM_COUNT,     	$034
+ 10.                       
+ 11.              		.EQU INTERRUPT_ENA,           $80
+ 12.              		.EQU RESET_READY_BIT,         $40
+ 13.              		.EQU START_AFTER_LOAD,        $10
+ 14.              		.EQU ENABLE_RESET_AND_START,  $D0
+ 15.              		.EQU ENABLE_AND_RESET,        $C0
+ 16.              		.EQU DISABLE_AND_STOP,	     $20
+ 17.              		.EQU ENABLE_AND_START,	     $B0
+ 18.              
+ 19.              		.EQU VIDEO_MEMORY,    	$100
+ 20.              		.EQU CRT_FIRST_ROW, 	$100
+ 21.              		.EQU CRT_SECOND_ROW,	$126
+ 22.              		.EQU CRT_THIRD_ROW,		$14C
+ 23.              		.EQU CRT_FOURTH_ROW,	$172
+ 24.              		.EQU CRT_FIFTH_ROW,		$198
+ 25.              		.EQU CRT_SIXTH_ROW,		$1B8
+ 26.              		
+ 27.              		.EQU BOTTOM_RIGHT,		$313
+ 28.              
+ 29.              		.EQU CRT_XREG,      	$314
+ 30.              		.EQU CRT_YREG,      	$315
+ 31.              
+ 32.              		.EQU CRT_CNTL,      	$316
+ 33.              		.EQU CRT_DATA,      	$317
+ 34.              		.EQU CRT_ROWS,      	$0E
+ 35.              		.EQU CRT_COLS,      	$26
+ 36.                        		.EQU CLEAR_DISPLAY, 	$01
+ 37.              
+ 38.              		.EQU PUT_NUM,       	$E00      	; MINI_OS JSRS
+ 39.              		.EQU GET_NUM,       	$E01
+ 40.              		.EQU PUT_STR,       	$E05
+ 41.              		.EQU PUT_NL,        	$E06
+ 42.              		.EQU PUT_NUM2,      	$E07
+ 43.              		.EQU PUT_CHR,       	$E08
+ 44.              
+ 45.              		.EQU SCORE_COUNTER,		$107
+ 46.              		.EQU LEVEL_COUNTER,		$11A
+ 47.              
+ 48.              		.EQU CHARGE_DELAY,		10	; number of iteration before the charges move
+ 49.              		.EQU SUB_DELAY,		5	; number of iteration before the subs move
+ 50.              		
+ 51.              ;------------------------------------------------------------------------------------------------------------
+ 52.              ; set up the playground
+ 53.              		
+ 54.              		
+ 55.  000 020E00  		LDS#	$E00
+ 56.  001 FFF033  		CIE	
+ 57.              
+ 58.  002 000001  		LDA#	CLEAR_DISPLAY
+ 59.  003 712316  		OUTB	CRT_CNTL
+ 60.              		
+ 61.  004 010000  		LDX#	0
+ 62.  005 000100  		LDA#	VIDEO_MEMORY
+ 63.  006 0422F9  		STA	I
+ 64.              		
+ 65.  007 502302  SETUP_SCORE:		LDC	SCORE
+ 66.  008 7162F9  		OUTB*	I
+ 67.  009 1B22F9  		INC	I
+ 68.  00A 110001  		ADX#	1
+ 69.  00B 210007  		CMX#	SCORE_LENGTH
+ 70.  00C 492007  		JNE	SETUP_SCORE
+ 71.              
+ 72.  00D 010000  		LDX#	0
+ 73.  00E 000100  		LDA#	VIDEO_MEMORY
+ 74.  00F 100013  		ADA#	19
+ 75.  010 0422F9  		STA	I
+ 76.              
+ 77.  011 502305  SETUP_LEVEL:		LDC	LEVEL
+ 78.  012 7162F9  		OUTB*	I
+ 79.  013 1B22F9  		INC	I
+ 80.  014 110001  		ADX#	1
+ 81.  015 210007  		CMX#	LEVEL_LENGTH
+ 82.  016 492011  		JNE	SETUP_LEVEL
+ 83.              
+ 84.  017 000031  		LDA#	'1'
+ 85.  018 71211A  		OUTB	LEVEL_COUNTER
+ 86.              	
+ 87.  019 000030  		LDA#	'0'
+ 88.  01A 712107  		OUTB	SCORE_COUNTER
+ 89.              
+ 90.  01B 010000  		LDX#	0
+ 91.  01C 000126  		LDA#	CRT_SECOND_ROW
+ 92.  01D 0422F9  		STA	I
+ 93.              
+ 94.  01E 502308  SHIP_ROW_1:		LDC	SHIP_ROW_ONE
+ 95.  01F 7162F9  		OUTB*	I
+ 96.  020 1B22F9  		INC	I
+ 97.  021 110001  		ADX#	1
+ 98.  022 210008  		CMX#	SHIP_ROW_ONE_LENGTH
+ 99.  023 49201E  		JNE	SHIP_ROW_1
+100.              
+101.  024 010000  		LDX#	0
+102.  025 00014C  		LDA#	CRT_THIRD_ROW
+103.  026 0422F9  		STA	I
+104.              
+105.  027 50230B  SHIP_ROW_2:		LDC	SHIP_ROW_TWO
+106.  028 7162F9  		OUTB*	I
+107.  029 1B22F9  		INC	I
+108.  02A 110001  		ADX#	1
+109.  02B 21000B  		CMX#	SHIP_ROW_TWO_LENGTH
+110.  02C 492027  		JNE	SHIP_ROW_2
+111.              		
+112.  02D 010000  		LDX#	0
+113.  02E 00007E  		LDA#	'~'
+114.  02F 714172  WATER_SURFACE:		OUTB+	CRT_FOURTH_ROW
+115.  030 600026  		AOC#	38
+116.  031 49202F  		JNE	WATER_SURFACE
+117.              
+118.  032 000005  		LDA#	5		; at 6 start from left
+119.  033 0422FB  		STA	SHIP_CURR_POS
+120.              
+121.  034 0000C0  		LDA#	ENABLE_AND_RESET	; make keyboard ready
+122.  035 712000  		OUTB	KBD_CNTL
+123.              
+124.  036 0022F8  		LDA	DELAY		; start the timer
+125.  037 732031  		OUTW	TIM_VALUE
+126.  038 0000D0  		LDA#	ENABLE_RESET_AND_START
+127.  039 712030  		OUTB	TIM_CNTL
+128.              		
+129.  03A FFF032  		SIE
+130.              ;------------------------------------------------------------------------------------------------------------
+131.              ; game runs through the timer interrupt, so main program will be doing nothing
+132.  03B 002300  MAIN:		LDA	SUB_COUNT
+133.  03C 200000  		CMA#	0		; do not inc Lv untill all subs are eliminated
+134.  03D 49203B  		JNE	MAIN
+135.  03E 0022FF  		LDA	SUB_LIMIT
+136.  03F 2022FE  		CMA	LEVEL_CNT	; do not inc Lv untill # of level of subs appeared
+137.  040 49203B  		JNE	MAIN
+138.  041 412043  		JSR	INCREASE_LEVEL
+139.  042 40203B  		JMP	MAIN	
+140.              
+141.              ;------------------------------------------------------------------------------------------------------------
+142.              ;increase level	
+143.              
+144.  043 680000  INCREASE_LEVEL:	BGN#	0
+145.  044 002300  		LDA	SUB_COUNT	; another layer of control
+146.  045 200000  		CMA#	0
+147.  046 492055  		JNE	DONE_INC_LEVEL
+148.  047 0022FF  		LDA	SUB_LIMIT
+149.  048 2022FE  		CMA	LEVEL_CNT
+150.  049 492055  		JNE	DONE_INC_LEVEL
+151.  04A 1B22FE  		INC	LEVEL_CNT
+152.              		
+153.  04B 000001  		LDA#	1		; increase the level displayed on the screen
+154.  04C 712315  		OUTB	CRT_YREG
+155.  04D 00001B  		LDA#	$1A + 1
+156.  04E 712314  		OUTB	CRT_XREG
+157.  04F 0022FE  		LDA	LEVEL_CNT
+158.  050 412E00  		JSR	PUT_NUM
+159.  051 000027  		LDA#	39
+160.  052 712314  		OUTB	CRT_XREG
+161.  053 0A22FF  		CLR	SUB_LIMIT	; each level start with 1 subs
+162.  054 412100  		JSR	MAKE_SUB
+163.              		
+164.  055 690000  DONE_INC_LEVEL:	FIN#	0
+165.  056 FFF040  		RTN
+166.              
+167.              ;--------------------------------------------------------------------------------------------------------------
+168.              ;keyboard ISR
+169.              		.EQU DISABLE_INTERRUPTS,	$00
+170.              		.EQU SHIP_SIZE_OFFSET,	$5
+171.              		.EQU LEFT_BORDER,		$5
+172.              		.EQU RIGHT_BORDER,		$20
+173.              		
+174.              
+175.  057 FFF010  KEYBD_ISR:		PSHA
+176.  058 FFF011  		PSHX
+177.  059 0822F9  		PSH	I
+178.  05A 0822FA  		PSH	J
+179.              
+180.  05B 000000  		LDA#	DISABLE_INTERRUPTS
+181.  05C 712000  		OUTB	KBD_CNTL
+182.  05D 702001  		INB	KBD_DATA
+183.  05E 200068  		CMA#	'h'
+184.  05F 482078  		JEQ	MOVE_SHIP_LEFT
+185.  060 20006C  		CMA#	'l'
+186.  061 482099  		JEQ	MOVE_SHIP_RIGHT
+187.  062 20006A  		CMA#	'j'
+188.  063 482066  		JEQ	LEFT_CHARGE
+189.  064 20006B  		CMA#	'k'
+190.  065 48206F  		JEQ	RIGHT_CHARGE
+191.              
+192.  066 0022FB  LEFT_CHARGE:		LDA	SHIP_CURR_POS
+193.  067 140005  		SBA#	SHIP_SIZE_OFFSET
+194.  068 100198  		ADA#	CRT_FIFTH_ROW
+195.  069 FFF010  		PSHA
+196.  06A FFF008  		TSF			; use stack to hold temp
+197.              
+198.  06B 000076  		LDA#	'v'
+199.  06C 717000  		OUTB*	! 0
+200.  06D 120001  		ADS#	1		; pop the used
+201.  06E 4020B9  		JMP	KEY_DONE
+202.              
+203.  06F 0022FB  RIGHT_CHARGE:		LDA	SHIP_CURR_POS
+204.  070 100005  		ADA#	SHIP_SIZE_OFFSET
+205.  071 100198  		ADA#	CRT_FIFTH_ROW
+206.  072 FFF010  		PSHA
+207.  073 FFF008  		TSF
+208.  074 000076  		LDA#	'v'
+209.  075 717000  		OUTB*	! 0
+210.  076 120001  		ADS#	1
+211.  077 4020B9  		JMP	KEY_DONE
+212.              
+213.  078 0022FB  MOVE_SHIP_LEFT:	LDA	SHIP_CURR_POS
+214.  079 200005  		CMA#	LEFT_BORDER
+215.  07A 4820B9  		JEQ	KEY_DONE
+216.              
+217.  07B 000126  		LDA#	CRT_SECOND_ROW
+218.  07C 1022FB  		ADA	SHIP_CURR_POS
+219.  07D 140003  		SBA#	3
+220.  07E 0422F9  		STA	I
+221.  07F 140001  		SBA#	1
+222.  080 0422FA  		STA	J
+223.              
+224.  081 010005  		LDX#	5		; loop 6 times
+225.  082 0822F9  MV_SHIP_LEFT_LOOP_1:	PSH	I
+226.  083 0822FA  		PSH	J
+227.  084 412278  		JSR	CRT_SWAP
+228.  085 120002  		ADS#	2
+229.  086 1B22F9  		INC	I
+230.  087 1B22FA  		INC	J
+231.  088 612082  		SOJ	MV_SHIP_LEFT_LOOP_1				
+232.              
+233.  089 00014C  		LDA#	CRT_THIRD_ROW	; I points to head of the ship
+234.  08A 1022FB  		ADA	SHIP_CURR_POS
+235.  08B 140005  		SBA#	SHIP_SIZE_OFFSET
+236.  08C 0422F9  		STA	I
+237.              
+238.  08D 140001  		SBA#	1
+239.  08E 0422FA  		STA	J		; J points to 1 before head of the ship
+240.              
+241.  08F 01000A  		LDX#	10		; loop 11 times
+242.  090 0822F9  MV_SHIP_LEFT_LOOP_2:	PSH	I
+243.  091 0822FA  		PSH	J
+244.  092 412278  		JSR	CRT_SWAP
+245.  093 120002  		ADS#	2
+246.  094 1B22F9  		INC	I
+247.  095 1B22FA  		INC	J
+248.  096 612090  		SOJ	MV_SHIP_LEFT_LOOP_2
+249.  097 1C22FB  		DEC	SHIP_CURR_POS
+250.  098 4020B9  		JMP	KEY_DONE
+251.              
+252.  099 0022FB  MOVE_SHIP_RIGHT:	LDA	SHIP_CURR_POS
+253.  09A 200020  		CMA#	RIGHT_BORDER
+254.  09B 4820B9  		JEQ	KEY_DONE
+255.              
+256.  09C 000126  		LDA#	CRT_SECOND_ROW
+257.  09D 1022FB  		ADA	SHIP_CURR_POS
+258.  09E 100002  		ADA#	2
+259.  09F 0422F9  		STA	I
+260.  0A0 100001  		ADA#	1
+261.  0A1 0422FA  		STA	J
+262.              
+263.  0A2 010005  		LDX#	5		; loop 6 times
+264.  0A3 0822F9  MV_SHIP_RIGHT_LOOP_1:	PSH	I
+265.  0A4 0822FA  		PSH	J
+266.  0A5 412278  		JSR	CRT_SWAP
+267.  0A6 120002  		ADS#	2
+268.  0A7 1C22F9  		DEC	I
+269.  0A8 1C22FA  		DEC	J
+270.  0A9 6120A3  		SOJ	MV_SHIP_RIGHT_LOOP_1				
+271.              
+272.  0AA 00014C  		LDA#	CRT_THIRD_ROW	; I points to tail of the ship
+273.  0AB 1022FB  		ADA	SHIP_CURR_POS
+274.  0AC 100005  		ADA#	SHIP_SIZE_OFFSET
+275.  0AD 0422F9  		STA	I
+276.              
+277.  0AE 100001  		ADA#	1
+278.  0AF 0422FA  		STA	J		; J points to 1 pass tail of the ship
+279.              
+280.  0B0 01000A  		LDX#	10		; loop 11 times
+281.  0B1 0822F9  MV_SHIP_RIGHT_LOOP_2:PSH	I
+282.  0B2 0822FA  		PSH	J
+283.  0B3 412278  		JSR	CRT_SWAP
+284.  0B4 120002  		ADS#	2
+285.  0B5 1C22F9  		DEC	I
+286.  0B6 1C22FA  		DEC	J
+287.  0B7 6120B1  		SOJ	MV_SHIP_RIGHT_LOOP_2
+288.  0B8 1B22FB  		INC	SHIP_CURR_POS
+289.              		
+290.              
+291.  0B9 0922FA  KEY_DONE:		POP	J
+292.  0BA 0922F9  		POP	I
+293.  0BB 0000C0  		LDA#	ENABLE_AND_RESET
+294.  0BC 712000  		OUTB	KBD_CNTL
+295.  0BD FFF014  		POPX
+296.  0BE FFF013  		POPA
+297.  0BF FFF041  		IRTN
+298.              
+299.              ;--------------------------------------------------------------------------------------------------------------
+300.  0C0 FFF033  TIMER_ISR:		CIE
+301.  0C1 FFF010  		PSHA
+302.  0C2 1B22FC  		INC	TIMER
+303.              ;---------------------------------------------------------------------------
+304.              ;random entering subs
+305.  0C3 0022FF  		LDA	SUB_LIMIT
+306.  0C4 2022FE  		CMA	LEVEL_CNT
+307.  0C5 4820CC  		JEQ	NOT_MAKE_SUBS	; not making new subs if sub_limit = level_count
+308.              		
+309.  0C6 0803E8  		PSH#	1000
+310.  0C7 4122A7  		JSR	RANDOM_TIMER
+311.  0C8 120001  		ADS#	1
+312.  0C9 200000  		CMA#	0
+313.  0CA 4920CC  		JNE	NOT_MAKE_SUBS
+314.  0CB 412100  		JSR	MAKE_SUB
+315.              ;---------------------------------------------------------------------------		
+316.  0CC 0022FC  NOT_MAKE_SUBS:		LDA	TIMER
+317.  0CD 200005  		CMA#	SUB_DELAY
+318.  0CE 4920D5  		JNE	SKIP_SUBS
+319.  0CF 002300  		LDA	SUB_COUNT
+320.  0D0 200000  		CMA#	0
+321.  0D1 4820D5  		JEQ	SKIP_SUBS	
+322.  0D2 4121AD  		JSR	MOVE_SUBS
+323.  0D3 412259  		JSR	MAKE_ENEMY_CHARGES
+324.  0D4 0022FC  		LDA	TIMER
+325.              
+326.  0D5 20000A  SKIP_SUBS:		CMA#	CHARGE_DELAY
+327.  0D6 4920D9  		JNE	TIMER_DONE
+328.  0D7 412154  		JSR	MOVE_CHARGES
+329.  0D8 0A22FC  		CLR	TIMER		; start new iteration
+330.              		
+331.              
+332.  0D9 0000C0  TIMER_DONE:		LDA#	ENABLE_AND_RESET
+333.  0DA 712030  		OUTB	TIM_CNTL
+334.  0DB FFF013  		POPA
+335.              
+336.  0DC FFF032  		SIE
+337.  0DD FFF041  		IRTN
+338.              
+339.              ;--------------------------------------------------------------------------------------------------------------
+340.  0DE FFF033  GAME_OVER:		CIE
+341.              		
+342.  0DF 020E00  		LDS#	$E00
+343.              
+344.  0E0 000001  		LDA#	CLEAR_DISPLAY
+345.  0E1 712316  		OUTB	CRT_CNTL
+346.              
+347.  0E2 000002  		LDA#	2
+348.  0E3 712314  		OUTB	CRT_XREG
+349.  0E4 010001  		LDX#	1
+350.  0E5 000322  		LDA#	EXPLOSION_1	; starting address of explosions
+351.  0E6 0422F9  		STA	I
+352.              
+353.  0E7 000002  EXPLOSION_LOOP:	LDA#	2
+354.  0E8 712314  		OUTB	CRT_XREG
+355.              
+356.  0E9 FFF003  		TXA
+357.  0EA 712315  		OUTB	CRT_YREG
+358.              
+359.  0EB 080021  		PSH#	EXPLOSION_1_LENGTH		; push the str_len
+360.  0EC 0822F9  		PSH	I		; push the address of the explosions
+361.  0ED 412E05  		JSR	PUT_STR
+362.  0EE 120002  		ADS#	2
+363.              
+364.  0EF 0022F9  		LDA	I
+365.  0F0 10000B  		ADA#	$34 - $29
+366.  0F1 0422F9  		STA	I
+367.              
+368.  0F2 110001  		ADX#	1
+369.  0F3 210009  		CMX#	9
+370.  0F4 4920E7  		JNE	EXPLOSION_LOOP
+371.              
+372.  0F5 00000A  		LDA#	10
+373.  0F6 712315  		OUTB	CRT_YREG
+374.  0F7 00000A  		LDA#	10
+375.  0F8 712314  		OUTB	CRT_XREG
+376.              
+377.  0F9 080014  		PSH#	GAMEOVER_LENGTH
+378.  0FA 08031B  		PSH#	GAMEOVER_MSG
+379.  0FB 412E05  		JSR	PUT_STR
+380.  0FC 120002  		ADS#	2
+381.  0FD 000027  		LDA#	39
+382.  0FE 712314  		OUTB	CRT_XREG
+383.  0FF FFFFFF  		HLT
+384.              
+385.              ;--------------------------------------------------------------------------------------------------------------
+386.              
+387.  100 680000  MAKE_SUB:		BGN#	0
+388.  101 FFF010  		PSHA
+389.  102 0822FA  		PSH	J
+390.  103 0822F9  		PSH	I
+391.              
+392.  104 1B2300  		INC	SUB_COUNT
+393.  105 1B22FF  		INC	SUB_LIMIT	; not making new subs when limit reaches
+394.              		
+395.              
+396.  106 080008  		PSH#	8
+397.  107 4122A7  		JSR	RANDOM_TIMER
+398.  108 120001  		ADS#  	1
+399.              
+400.  109 100006  		ADA#	6		; starting at sixth row
+401.  10A 0422FA  		STA	J		; J = TEMP_Y, sub_entering height
+402.              
+403.  10B 0822FA  		PSH	J
+404.  10C 412283  		JSR	NO_BLOCK
+405.  10D 120001  		ADS#	1
+406.  10E 200001  		CMA#	1
+407.  10F 482113  		JEQ	OPEN_ROUTE	; 1 = no block
+408.  110 1C2300  		DEC	SUB_COUNT
+409.  111 1C22FF  		DEC	SUB_LIMIT
+410.  112 40214D  		JMP	MAKE_SUB_DONE	
+411.              
+412.  113 080001  OPEN_ROUTE:		PSH#	1		; random 0/1
+413.  114 4122A7  		JSR	RANDOM_TIMER
+414.  115 120001  		ADS#	1
+415.  116 180025  		MUL#	37
+416.  117 100001  		ADA#	1
+417.              
+418.  118 0422F9  		STA	I		; I = horizontal offset
+419.  119 200026  		CMA#	38
+420.  11A 48211C  		JEQ	ENTERING_RIGHT; Entering right
+421.  11B 402137  		JMP	ENTERING_LEFT ; Entering left
+422.              		
+423.  11C 0022FF  ENTERING_RIGHT:	LDA	SUB_LIMIT	; choose fast or slow sub: sub_limit mod 2, 0=slow 1=fast
+424.  11D 1A0002  		MOD#	2
+425.  11E 200000  		CMA#	0
+426.  11F 482121  		JEQ	SLOW_ENTERING_RIGHT
+427.  120 40212C  		JMP	FAST_ENTERING_RIGHT
+428.              
+429.  121 0022FA  SLOW_ENTERING_RIGHT:	LDA	J
+430.  122 712315  		OUTB	CRT_YREG
+431.  123 0022F9  		LDA	I
+432.  124 140007  		SBA#	ONE_POINT_SUB_RIGHT_LENGTH
+433.  125 0422F9  		STA	I
+434.  126 712314  		OUTB	CRT_XREG
+435.  127 080007  		PSH#	ONE_POINT_SUB_RIGHT_LENGTH
+436.  128 08030F  		PSH#	ONE_POINT_SUB_RIGHT
+437.  129 412E05  		JSR	PUT_STR
+438.  12A 120002  		ADS#	2
+439.  12B 40214D  		JMP 	MAKE_SUB_DONE
+440.              
+441.  12C 0022FA  FAST_ENTERING_RIGHT:	LDA	J
+442.  12D 712315  		OUTB	CRT_YREG
+443.  12E 0022F9  		LDA	I
+444.  12F 140003  		SBA#	TWO_POINT_SUB_RIGHT_LENGTH
+445.  130 0422F9  		STA	I
+446.  131 712314  		OUTB	CRT_XREG
+447.  132 080003  		PSH#	TWO_POINT_SUB_RIGHT_LENGTH
+448.  133 080315  		PSH#	TWO_POINT_SUB_RIGHT
+449.  134 412E05  		JSR	PUT_STR
+450.  135 120002  		ADS#	2
+451.  136 40214D  		JMP 	MAKE_SUB_DONE
+452.              ;----------------------------------------------------------------------------------------
+453.              
+454.  137 0022FF  ENTERING_LEFT:		LDA	SUB_LIMIT	; choose fast or slow sub: sub_limit mod 2, 0=slow 1=fast
+455.  138 1A0002  		MOD#	2
+456.  139 200000  		CMA#	0
+457.  13A 48213C  		JEQ	SLOW_ENTERING_LEFT
+458.  13B 402145  		JMP	FAST_ENTERING_LEFT
+459.              
+460.  13C 0022FA  SLOW_ENTERING_LEFT:	LDA	J
+461.  13D 712315  		OUTB	CRT_YREG
+462.  13E 0022F9  		LDA	I
+463.  13F 712314  		OUTB	CRT_XREG
+464.  140 080007  		PSH#	ONE_POINT_SUB_LEFT_LENGTH
+465.  141 080312  		PSH#	ONE_POINT_SUB_LEFT
+466.  142 412E05  		JSR	PUT_STR
+467.  143 120002  		ADS#	2
+468.  144 40214D  		JMP	MAKE_SUB_DONE
+469.              
+470.  145 0022FA  FAST_ENTERING_LEFT:  LDA	J
+471.  146 712315  		OUTB	CRT_YREG
+472.  147 0022F9  		LDA	I
+473.  148 712314  		OUTB	CRT_XREG
+474.  149 080003  		PSH#	TWO_POINT_SUB_LEFT_LENGTH
+475.  14A 080316  		PSH#	TWO_POINT_SUB_LEFT
+476.  14B 412E05  		JSR	PUT_STR
+477.  14C 120002  		ADS#	2
+478.              
+479.  14D 000027  MAKE_SUB_DONE:		LDA#	39
+480.  14E 712314  		OUTB	CRT_XREG
+481.              
+482.  14F 0922F9  		POP	I
+483.  150 0922FA  		POP	J
+484.  151 FFF013  		POPA
+485.  152 690000  		FIN#	0
+486.  153 FFF040  		RTN
+487.              
+488.              ;--------------------------------------------------------------------------------------------------------------
+489.              ;move_charges (move the charges)
+490.              
+491.  154 680000  MOVE_CHARGES:		BGN#	0
+492.  155 FFF010  		PSHA
+493.  156 0822F9  		PSH	I
+494.  157 0822FA  		PSH	J
+495.              		
+496.  158 000313  		LDA#	BOTTOM_RIGHT
+497.  159 0422F9  		STA	I
+498.  15A 0022F9  BOTTOM_LINE_CHECK:	LDA	I
+499.  15B 2002ED  		CMA#	BOTTOM_RIGHT - 38	; right end of second last line
+500.  15C 4C2166  		JLE	MOVE_DOWN
+501.  15D 7062F9  		INB*	I
+502.  15E 1C22F9  		DEC	I
+503.  15F 200076  		CMA#	'v'
+504.  160 49215A  		JNE	BOTTOM_LINE_CHECK
+505.  161 1B22F9  		INC	I
+506.  162 000020  		LDA#	' '
+507.  163 7162F9  		OUTB*	I
+508.  164 1C22F9  		DEC	I
+509.  165 40215A  		JMP	BOTTOM_LINE_CHECK
+510.              
+511.              
+512.  166 0022F9  MOVE_DOWN:		LDA	I
+513.  167 200198  		CMA#	CRT_FIFTH_ROW	; scan the screen from bottom right to the left end of fifth row, check for charges, and move them one row below
+514.  168 4A217D  		JLT	MOVE_UP
+515.  169 7062F9  		INB*	I
+516.  16A 1C22F9  		DEC	I
+517.  16B 200076  		CMA#	'v'
+518.  16C 492166  		JNE	MOVE_DOWN
+519.              
+520.  16D 1B22F9  		INC	I
+521.  16E 0022F9  		LDA	I
+522.  16F 100026  		ADA#	38
+523.  170 0422FA  		STA	J
+524.  171 7062FA  		INB*	J
+525.  172 20003E  		CMA# 	'>'	
+526.  173 4822CA  		JEQ	SUB_DESTROYED
+527.  174 20003C  		CMA# 	'<'	
+528.  175 4822CA  		JEQ	SUB_DESTROYED
+529.  176 20002A  		CMA# 	'*'	
+530.  177 4822CA  		JEQ	SUB_DESTROYED
+531.  178 0822F9  		PSH	I
+532.  179 0822FA  		PSH	J
+533.  17A 412278  		JSR	CRT_SWAP
+534.  17B 120002  		ADS#	2
+535.  17C 402166  		JMP	MOVE_DOWN
+536.              
+537.  17D 000198  MOVE_UP:		LDA#	CRT_FIFTH_ROW
+538.  17E 0422F9  		STA	I
+539.              
+540.  17F 0022F9  TOP_LINE_CHECK:		LDA	I
+541.  180 2001BE  		CMA#	CRT_FIFTH_ROW + 38
+542.  181 4D2196  		JGT	MOVE_UP_LOOP
+543.  182 7062F9  		INB*	I
+544.  183 1B22F9  		INC	I
+545.  184 20005E  		CMA#	'^'
+546.  185 49217F  		JNE	TOP_LINE_CHECK
+547.  186 1C22F9  		DEC	I
+548.              
+549.  187 0022F9  		LDA	I		; check if ship hit
+550.  188 140198  		SBA#	CRT_FIFTH_ROW
+551.  189 0422FA  		STA	J		; enemy charge X-pos
+552.  18A 0022FB  		LDA	SHIP_CURR_POS
+553.  18B 140005  		SBA#	SHIP_SIZE_OFFSET
+554.  18C 2022FA  		CMA	J
+555.  18D 4D2192  		JGT	NOT_HIT
+556.  18E 10000A  		ADA#	2 * SHIP_SIZE_OFFSET
+557.  18F 2022FA  		CMA	J
+558.  190 4A2192  		JLT	NOT_HIT
+559.  191 4020DE  		JMP	GAME_OVER	
+560.              
+561.  192 000020  NOT_HIT:		LDA#	' '
+562.  193 7162F9  		OUTB*	I
+563.  194 1B22F9  		INC	I
+564.  195 40217F  		JMP	TOP_LINE_CHECK
+565.              
+566.              
+567.  196 0022F9  MOVE_UP_LOOP:		LDA	I
+568.  197 200313  		CMA#	BOTTOM_RIGHT	; scan the screen from bottom right to the left end of fifth row, check for charges, and move them one row below
+569.  198 4D21A8  		JGT	MOVE_DONE
+570.  199 7062F9  		INB*	I
+571.  19A 1B22F9  		INC	I
+572.  19B 20005E  		CMA#	'^'
+573.  19C 492196  		JNE	MOVE_UP_LOOP
+574.              
+575.  19D 1C22F9  		DEC	I
+576.  19E 0022F9  		LDA	I
+577.  19F 140026  		SBA#	38
+578.  1A0 0422FA  		STA	J
+579.              		
+580.  1A1 0822F9  		PSH	I
+581.  1A2 0822FA  		PSH	J
+582.  1A3 412278  		JSR	CRT_SWAP
+583.  1A4 120002  		ADS#	2
+584.  1A5 402196  		JMP	MOVE_UP_LOOP
+585.              
+586.  1A6 1C22F9  DONE_MOVING:		DEC	I
+587.  1A7 402166  		JMP	MOVE_DOWN
+588.              		
+589.  1A8 0922FA  MOVE_DONE:		POP	J
+590.  1A9 0922F9  		POP	I
+591.  1AA FFF013  		POPA
+592.  1AB 690000  		FIN#	0
+593.  1AC FFF040  		RTN
+594.              ;-------------------------------------------------------------------------------------------------------------
+595.              ; move_subs	(move the submarines)
+596.  1AD 680000  MOVE_SUBS:		BGN#	0
+597.  1AE 0822F9  		PSH	I
+598.  1AF 0822FA  		PSH	J
+599.  1B0 FFF010  		PSHA
+600.              
+601.  1B1 000313  		LDA#	BOTTOM_RIGHT
+602.  1B2 0422F9  		STA	I
+603.              		
+604.  1B3 0022F9  MOVE_SUBS_RIGHT:	LDA	I
+605.  1B4 200198  		CMA#	CRT_FIFTH_ROW	; scan the screen from bottom right to the left end of fifth row
+606.  1B5 4A21D1  		JLT	MOVE_SUBS_LEFT
+607.  1B6 7062F9  		INB*	I
+608.  1B7 1C22F9  		DEC	I
+609.  1B8 20003E  		CMA#	'>'
+610.  1B9 4821C9  		JEQ	SHIFT_SUB_RIGHT
+611.  1BA 20003C  		CMA#	'<'
+612.  1BB 4921C6  		JNE	RIGHT_DIRECTION_SUB
+613.              
+614.  1BC 7062F9  		INB*	I		; skip over this sub
+615.  1BD 20003C  		CMA#	'<'
+616.  1BE 4821C3  		JEQ	TWO_POINT_LEFT
+617.              
+618.  1BF 0022F9  		LDA	I
+619.  1C0 140006  		SBA#	ONE_POINT_SUB_LEFT_LENGTH - 1
+620.  1C1 0422F9  		STA	I
+621.  1C2 4021B3  		JMP	MOVE_SUBS_RIGHT
+622.              
+623.  1C3 0022F9  TWO_POINT_LEFT:	LDA	I
+624.  1C4 140002  		SBA#	2
+625.  1C5 4021B3  		JMP	MOVE_SUBS_RIGHT
+626.              
+627.  1C6 20002A  RIGHT_DIRECTION_SUB:	CMA#	'*'
+628.  1C7 4821C9  		JEQ	SHIFT_SUB_RIGHT
+629.  1C8 4021B3  		JMP	MOVE_SUBS_RIGHT
+630.              
+631.  1C9 412228  SHIFT_SUB_RIGHT:	JSR	RIGHT_SHIFT	; return 1 position after the sub
+632.  1CA 0422F9  		STA	I
+633.  1CB 100001  		ADA#	1
+634.  1CC 140100  		SBA#	$100
+635.  1CD 1A0026  		MOD#	38
+636.  1CE 4921D0  		JNE	RIGHT_WALL_ATE
+637.  1CF 1C2300  		DEC	SUB_COUNT	
+638.  1D0 4021B3  RIGHT_WALL_ATE:	JMP	MOVE_SUBS_RIGHT
+639.              
+640.              ;-----------------------------------------------------------------------------------------
+641.              
+642.  1D1 000198  MOVE_SUBS_LEFT:	LDA#	CRT_FIFTH_ROW	; scan the screen from fifth row left end to bottom right
+643.  1D2 0422F9  		STA	I
+644.              
+645.  1D3 0022F9  LOOP_MV_SUB_L:		LDA	I
+646.  1D4 200313  		CMA#	BOTTOM_RIGHT	
+647.  1D5 4D21F1  		JGT	MOVE_SUBS_DONE
+648.  1D6 7062F9  		INB*	I
+649.  1D7 1B22F9  		INC	I
+650.  1D8 20003C  		CMA#	'<'
+651.  1D9 4821EA  		JEQ	SHIFT_SUB_LEFT
+652.  1DA 20003E  		CMA#	'>'
+653.  1DB 4921E7  		JNE	LEFT_DIRECTION_SUB
+654.              
+655.  1DC 7062F9  		INB*	I		; skip over this sub
+656.  1DD 20003E  		CMA#	'>'
+657.  1DE 4821E3  		JEQ	TWO_POINT_RIGHT
+658.              
+659.  1DF 0022F9  		LDA	I
+660.  1E0 100006  		ADA#	ONE_POINT_SUB_RIGHT_LENGTH - 1
+661.  1E1 0422F9  		STA	I
+662.  1E2 4021D3  		JMP	LOOP_MV_SUB_L
+663.              
+664.  1E3 0022F9  TWO_POINT_RIGHT:	LDA	I
+665.  1E4 100002  		ADA#	2
+666.  1E5 0422F9  		STA	I
+667.  1E6 4021D3  		JMP	LOOP_MV_SUB_L
+668.              
+669.  1E7 20002A  LEFT_DIRECTION_SUB:	CMA#	'*'
+670.  1E8 4821EA  		JEQ	SHIFT_SUB_LEFT
+671.  1E9 4021D3  		JMP	LOOP_MV_SUB_L
+672.              
+673.  1EA 4121F6  SHIFT_SUB_LEFT:	JSR	LEFT_SHIFT	; return 1 position after the sub
+674.  1EB 0422F9  		STA	I
+675.  1EC 140100  		SBA#	$100
+676.  1ED 1A0026  		MOD#	38
+677.  1EE 4921F0  		JNE	LEFT_WALL_ATE
+678.  1EF 1C2300  		DEC	SUB_COUNT	
+679.  1F0 4021D3  LEFT_WALL_ATE:		JMP	LOOP_MV_SUB_L
+680.              		
+681.  1F1 FFF013  MOVE_SUBS_DONE:	POPA
+682.  1F2 0922FA  		POP	J
+683.  1F3 0922F9  		POP	I
+684.  1F4 690000  		FIN#	0
+685.  1F5 FFF040  		RTN
+686.              ;-------------------------------------------------------------------------------------------------------------
+687.              ;LEFT_SHIFT
+688.  1F6 680000  LEFT_SHIFT:		BGN#	0
+689.  1F7 0822F9  		PSH	I
+690.  1F8 0822FA  		PSH	J
+691.              
+692.  1F9 7062F9  		INB*	I
+693.  1FA 20002A  		CMA#	'*'
+694.  1FB 482201  		JEQ	SLOW_LEFT
+695.  1FC 1C22F9  		DEC	I
+696.  1FD 0022F9  		LDA	I
+697.  1FE 140002  		SBA#	2
+698.  1FF 0422FA  		STA	J		; J = I - 2
+699.  200 402205  		JMP	SHIFT_LEFT
+700.              		
+701.  201 1C22F9  SLOW_LEFT:		DEC	I
+702.  202 0022F9  		LDA	I
+703.  203 140001  		SBA#	1
+704.  204 0422FA  		STA	J		; J = I - 1
+705.              
+706.  205 140100  SHIFT_LEFT:		SBA#	$100
+707.  206 1A0026  		MOD#	38
+708.  207 200025  		CMA#	37
+709.  208 48220C  		JEQ	SLOW_LEFT_WALL
+710.  209 200024  		CMA#	36
+711.  20A 48221A  		JEQ	FAST_LEFT_WALL
+712.  20B 402210  		JMP	LEFT_WALL
+713.              
+714.  20C 000020  SLOW_LEFT_WALL:		LDA#	' '
+715.  20D 7162F9  		OUTB*	I
+716.  20E 1B22F9  		INC	I
+717.  20F 1B22FA  		INC	J
+718.              	
+719.  210 7062F9  LEFT_WALL:		INB*	I
+720.  211 200020  		CMA#	' '
+721.  212 482223  		JEQ	LEFT_SHIFT_DONE
+722.              
+723.  213 0822F9  		PSH	I
+724.  214 0822FA  		PSH	J
+725.  215 412278  		JSR	CRT_SWAP
+726.  216 120002  		ADS#	2
+727.              
+728.  217 1B22F9  		INC	I
+729.  218 1B22FA  		INC	J
+730.  219 402210  		JMP	LEFT_WALL
+731.              
+732.  21A 000020  FAST_LEFT_WALL:		LDA#	' '
+733.  21B 7162F9  		OUTB*	I
+734.  21C 1B22F9  		INC	I
+735.  21D 1B22FA  		INC	J
+736.              
+737.  21E 000020  		LDA#	' '
+738.  21F 7162F9  		OUTB*	I
+739.  220 1B22F9  		INC	I
+740.  221 1B22FA  		INC	J
+741.  222 402210  		JMP	LEFT_WALL	
+742.              		
+743.  223 0022FA  LEFT_SHIFT_DONE:	LDA	J
+744.  224 0922FA  		POP	J
+745.  225 0922F9  		POP	I		
+746.  226 690000  		FIN#	0
+747.  227 FFF040  		RTN
+748.              ;-------------------------------------------------------------------------------------------------------------
+749.              ;RIGHT_SHIFT (move the sub right 1 spot)
+750.  228 680000  RIGHT_SHIFT:		BGN#	0
+751.  229 0822F9  		PSH	I
+752.  22A 0822FA  		PSH	J
+753.              		
+754.  22B 7062F9  		INB*	I
+755.  22C 20002A  		CMA#	'*'
+756.  22D 482233  		JEQ	SLOW_RIGHT
+757.  22E 1B22F9  		INC	I
+758.  22F 0022F9  		LDA	I
+759.  230 100002  		ADA#	2
+760.  231 0422FA  		STA	J		; J = I + 2
+761.  232 402237  		JMP	SHIFT_RIGHT
+762.              
+763.  233 1B22F9  SLOW_RIGHT:		INC	I
+764.  234 0022F9  		LDA	I
+765.  235 100001  		ADA#	1
+766.  236 0422FA  		STA	J		; J = I + 1
+767.              
+768.  237 140100  SHIFT_RIGHT:		SBA#	$100
+769.  238 1A0026  		MOD#	38
+770.  239 200000  		CMA#	0
+771.  23A 48223E  		JEQ	SLOW_RIGHT_WALL
+772.  23B 200001  		CMA#	1
+773.  23C 48224C  		JEQ	FAST_RIGHT_WALL
+774.  23D 402242  		JMP	RIGHT_WALL
+775.              
+776.  23E 000020  SLOW_RIGHT_WALL:	LDA#	' '
+777.  23F 7162F9  		OUTB*	I
+778.  240 1C22F9  		DEC	I
+779.  241 1C22FA  		DEC	J
+780.              	
+781.  242 7062F9  RIGHT_WALL:		INB*	I
+782.  243 200020  		CMA#	' '
+783.  244 482254  		JEQ	RIGHT_SHIFT_DONE
+784.              
+785.  245 0822F9  		PSH	I
+786.  246 0822FA  		PSH	J
+787.  247 412278  		JSR	CRT_SWAP
+788.  248 120002  		ADS#	2
+789.              
+790.  249 1C22F9  		DEC	I
+791.  24A 1C22FA  		DEC	J
+792.  24B 402242  		JMP	RIGHT_WALL
+793.              
+794.  24C 000020  FAST_RIGHT_WALL:	LDA#	' '		; shift two place once, eat two once
+795.  24D 7162F9  		OUTB*	I
+796.  24E 1C22F9  		DEC	I
+797.  24F 1C22FA  		DEC	J
+798.              
+799.  250 000020  		LDA#	' '
+800.  251 7162F9  		OUTB*	I
+801.  252 1C22F9  		DEC	I
+802.  253 1C22FA  		DEC	J
+803.              
+804.  254 0022FA  RIGHT_SHIFT_DONE:	LDA	J
+805.  255 0922FA  		POP	J
+806.  256 0922F9  		POP	I		
+807.  257 690000  		FIN#	0
+808.  258 FFF040  		RTN
+809.              
+810.              ;--------------------------------------------------------------------------------------------------------------
+811.              ; make_enemy_charges
+812.  259 680000  MAKE_ENEMY_CHARGES: BGN#	0
+813.  25A 0822F9  	     PSH	I
+814.  25B 0822FA  	     PSH	J
+815.              
+816.  25C 08000A  		PSH#	10
+817.  25D 4122A7  		JSR	RANDOM_TIMER
+818.  25E 120001  		ADS#	1
+819.  25F 200000  		CMA#	0
+820.  260 492274  		JNE	MAKE_MINES_DONE
+821.  261 002300  		LDA	SUB_COUNT
+822.  262 200000  		CMA#	0
+823.  263 482274  		JEQ	MAKE_MINES_DONE
+824.              
+825.  264 000313  	     LDA#	BOTTOM_RIGHT
+826.  265 0422F9  	     STA	I
+827.  266 0022F9  FIND_ENEMY_SUB:  LDA	I
+828.  267 2001B8  	     CMA#	CRT_SIXTH_ROW
+829.  268 7062F9  	     INB*	I
+830.  269 1C22F9  	     DEC	I
+831.  26A 20003E  	     CMA#	'>'
+832.  26B 48226F  	     JEQ	MAKE_ENEMY_BOMB
+833.  26C 20003C  	     CMA#	'<'
+834.  26D 48226F  	     JEQ	MAKE_ENEMY_BOMB
+835.  26E 402266  	     JMP	FIND_ENEMY_SUB
+836.              
+837.  26F 0022F9  MAKE_ENEMY_BOMB: LDA	I
+838.  270 140026  	     SBA#	38
+839.  271 0422F9  	     STA	I
+840.  272 00005E  	     LDA#   	'^'
+841.  273 7162F9  	     OUTB*	I
+842.              
+843.  274 0922FA  MAKE_MINES_DONE:    POP	J
+844.  275 0922F9  	     POP	I
+845.  276 690000  	     FIN#	0
+846.  277 FFF040  	     RTN
+847.              
+848.              ;--------------------------------------------------------------------------------------------------------------
+849.              ;crt_swap(U,V)
+850.              		.EQU U,	2
+851.              		.EQU V,	3
+852.  278 680000  CRT_SWAP:		BGN#	0
+853.  279 FFF010  		PSHA
+854.  27A 707002  		INB*	! U
+855.  27B FFF010  		PSHA	
+856.  27C 707003  		INB*	! V
+857.  27D 717002  		OUTB*	! U
+858.  27E FFF013  		POPA	
+859.  27F 717003  		OUTB*	! V
+860.  280 FFF013  		POPA
+861.  281 690000  		FIN#	0
+862.  282 FFF040  		RTN
+863.              
+864.              ;------------------------------------------------------------------------------------------------------------
+865.              ; No Block on y
+866.              		.EQU Y, 2
+867.  283 680000  NO_BLOCK:		BGN#	0
+868.  284 FFF011  		PSHX
+869.  285 0822F9  		PSH	I
+870.              
+871.  286 003002  		LDA	! Y
+872.  287 140001  		SBA#	1
+873.  288 180026  		MUL#	38
+874.  289 100100  		ADA#	$100
+875.  28A 0422F9  		STA	I
+876.              
+877.  28B 010025  		LDX#	37		; loop 38 times
+878.  28C 7062F9  NO_BLOCK_LOOP:		INB*	I
+879.  28D 20003C  		CMA#	'<'
+880.  28E 482297  		JEQ	BLOCKED
+881.  28F 20003E  		CMA#	'>'
+882.  290 482297  		JEQ	BLOCKED
+883.  291 20002A  		CMA#	'*'
+884.  292 482297  		JEQ	BLOCKED
+885.  293 1B22F9  		INC	I	
+886.  294 61228C  		SOJ	NO_BLOCK_LOOP
+887.  295 000001  		LDA#	1		; checked, no block
+888.  296 402298  		JMP	NO_BLOCK_DONE
+889.              
+890.  297 000000  BLOCKED:		LDA#	0
+891.  298 0922F9  NO_BLOCK_DONE:		POP	I
+892.  299 FFF014  		POPX
+893.  29A 690000  		FIN#	0
+894.  29B FFF040  		RTN
+895.              
+896.              ;-------------------------------------------------------------------------------------------------------------
+897.              		.EQU	randomMax, 2
+898.  29C 680000  RANDOM:		BGN#	0
+899.  29D 0022FD  		LDA	SEED
+900.  29E 180ADB  		MUL#	2779
+901.  29F 1007CD  		ADA#	1997
+902.  2A0 1A0800  		MOD#	2048
+903.  2A1 0422FD  		STA	SEED
+904.  2A2 1B3002  		INC !	randomMax
+905.  2A3 1A3002  		MOD !	randomMax
+906.  2A4 100004  		ADA#  	4
+907.  2A5 690000  		FIN#	0
+908.  2A6 FFF040  		RTN
+909.              
+910.              ;-------------------------------------------------------------------------------------------------------------
+911.              		.EQU	randomMaxD, 2
+912.  2A7 680000  RANDOM_TIMER:		BGN#	0
+913.  2A8 0022FD  		LDA	SEED
+914.  2A9 180ADB  		MUL#	2779
+915.  2AA 1007CD  		ADA#	1997
+916.  2AB 1A0800  		MOD#	2048
+917.  2AC 0422FD  		STA	SEED
+918.  2AD 1B3002  		INC !	randomMaxD
+919.  2AE 1A3002  		MOD !	randomMaxD
+920.  2AF 690000  		FIN#	0
+921.  2B0 FFF040  		RTN
+922.              
+923.              ;-------------------------------------------------------------------------------------------------------------
+924.              		
+925.              		.EQU HIT_SUB_POS,	2 
+926.              
+927.  2B1 680000  INCREASE_SCORE:	BGN#	0
+928.  2B2 1B2301  		INC	SCORE_CNT
+929.              		
+930.  2B3 707002  		INB*	! HIT_SUB_POS	; hit which type of sub?
+931.  2B4 20002A  		CMA#	'*'
+932.  2B5 4822C0  		JEQ	DONE_INC_SCORE
+933.              
+934.  2B6 1C3002  		DEC	! HIT_SUB_POS
+935.  2B7 707002  		INB*	! HIT_SUB_POS	; hit which type of sub?
+936.  2B8 20002A  		CMA#	'*'
+937.  2B9 4822C0  		JEQ	DONE_INC_SCORE
+938.              
+939.  2BA 1B3002  		INC	! HIT_SUB_POS
+940.  2BB 1B3002  		INC	! HIT_SUB_POS
+941.  2BC 707002  		INB*	! HIT_SUB_POS	; hit which type of sub?
+942.  2BD 20002A  		CMA#	'*'
+943.  2BE 4822C0  		JEQ	DONE_INC_SCORE
+944.              		
+945.  2BF 1B2301  		INC	SCORE_CNT
+946.              
+947.              
+948.              		
+949.  2C0 000001  DONE_INC_SCORE:	LDA#	1		; increase the level displayed on the screen
+950.  2C1 712315  		OUTB	CRT_YREG
+951.  2C2 000008  		LDA#	8
+952.  2C3 712314  		OUTB	CRT_XREG
+953.  2C4 002301  		LDA	SCORE_CNT
+954.  2C5 412E00  		JSR	PUT_NUM
+955.  2C6 000027  		LDA#	39
+956.  2C7 712314  		OUTB	CRT_XREG
+957.  2C8 690000  		FIN#	0
+958.  2C9 FFF040  		RTN
+959.              
+960.              ;-------------------------------------------------------------------------------------------------------------
+961.              ; submarine destroyed
+962.  2CA 0822FA  SUB_DESTROYED:		PSH	J
+963.  2CB 4122B1  		JSR	INCREASE_SCORE
+964.  2CC 120001  		ADS#	1
+965.              
+966.  2CD 000020  		LDA# 	' '
+967.  2CE 7162F9  		OUTB*	I
+968.  2CF 010000  		LDX# 	0
+969.  2D0 0022FA  		LDA	J
+970.  2D1 140005  		SBA#	5
+971.  2D2 0422FA  		STA	J		
+972.              
+973.  2D3 000020  LOOP_DESTROY:	LDA#	' '
+974.  2D4 7162FA  		OUTB*	J
+975.  2D5 1B22FA  		INC	J
+976.  2D6 110001  		ADX#	1
+977.  2D7 21000A  		CMX#	10
+978.  2D8 4A22D3  		JLT	LOOP_DESTROY
+979.              ;----------------------------------------------
+980.  2D9 010000  		LDX#	0
+981.  2DA 0022FA  		LDA	J
+982.  2DB 140005  		SBA#	5
+983.  2DC 0422FA  		STA	J
+984.  2DD 502317  BOOM_LOOP_MSG:	LDC	BLOW_UP_MSG
+985.  2DE 7162FA  		OUTB*	J
+986.  2DF 1B22FA  		INC	J
+987.  2E0 110001  		ADX#	1
+988.  2E1 210009  		CMX#	9
+989.  2E2 4922DD  		JNE	BOOM_LOOP_MSG
+990.              ;--------------------------------------------------
+991.              		
+992.  2E3 000020  		LDA#	DISABLE_AND_STOP
+993.  2E4 712030  		OUTB	TIM_CNTL
+994.              
+995.  2E5 0022F8  		LDA	DELAY
+996.  2E6 180003  		MUL#	3
+997.              
+998.  2E7 140001  LOOP_ONE:		SBA#	1
+999.  2E8 200000  		CMA#	0
+1000.  2E9 4922E7  		JNE	LOOP_ONE
+1001.              
+1002.  2EA 0000B0  		LDA#	ENABLE_AND_START
+1003.  2EB 712030  		OUTB	TIM_CNTL
+1004.              
+1005.  2EC 010000  CLEAN_UP_BOOM:	LDX#	0
+1006.  2ED 0022FA  		LDA	J
+1007.  2EE 140009  		SBA#	9
+1008.  2EF 0422FA  		STA	J
+1009.  2F0 000020  CLEAN_UP_LOOP:	LDA#	' '
+1010.  2F1 7162FA  		OUTB*	J
+1011.  2F2 1B22FA  		INC	J
+1012.  2F3 110001  		ADX#	1
+1013.  2F4 21000A  		CMX#	10
+1014.  2F5 4A22F0  		JLT	CLEAN_UP_LOOP
+1015.  2F6 1C2300  		DEC	SUB_COUNT
+1016.  2F7 4021A6  	     JMP	DONE_MOVING
+1017.              
+1018.              ;--------------------------------------------------------------------------------------------------------------
+1019.              
+1020.  2F8 004E20  DELAY:    	.WORD 20000
+1021.  2F9 FFFFFFFFFFFFFFFF  I:	.BLKW 1			; global temps
+1022.  2FA FFFFFFFFFFFFFFFF  J:	.BLKW 1
+1023.  2FB FFFFFFFFFFFFFFFF  SHIP_CURR_POS:	.BLKW 1
+1024.  2FC 000000  TIMER:	.WORD	0
+1025.  2FD 000000  SEED:	.WORD	0
+1026.  2FE 000000  LEVEL_CNT:	.WORD	0
+1027.  2FF 000000  SUB_LIMIT:	.WORD	0
+1028.  300 000000  SUB_COUNT:	.WORD	0			; -(current alive subs)
+1029.  301 000000  SCORE_CNT:	.WORD	0
+1030.              
+1031.              
+1032.  302 53636F  SCORE:	.CHAR	'Score: ', SCORE_LENGTH
+      303 72653A
+      304 202020
+1033.  305 4C6576  LEVEL:	.CHAR	'Level: ', LEVEL_LENGTH
+      306 656C3A
+      307 202020
+1034.  308 20205C  SHIP_ROW_ONE:	.CHAR	'  \\   O,', SHIP_ROW_ONE_LENGTH
+      309 202020
+      30A 4F2C20
+1035.  30B 5C5F5F  SHIP_ROW_TWO:	.CHAR	'\\___\\/ )__/', SHIP_ROW_TWO_LENGTH
+      30C 5F5C2F
+      30D 20295F
+      30E 5F2F20
+      30F 3C2A2A
+1036.              
+1037.  30F 3C2A2A  ONE_POINT_SUB_RIGHT:	.CHAR '<*****<', ONE_POINT_SUB_RIGHT_LENGTH	; slow speed sub
+      310 2A2A2A
+      311 3C2020
+1038.  312 3E2A2A  ONE_POINT_SUB_LEFT:	.CHAR '>*****>', ONE_POINT_SUB_LEFT_LENGTH
+      313 2A2A2A
+      314 3E2020
+1039.  315 3C3C3C  TWO_POINT_SUB_RIGHT:	.CHAR '<<<', TWO_POINT_SUB_RIGHT_LENGTH	; fast speed sub
+1040.  316 3E3E3E  TWO_POINT_SUB_LEFT:	.CHAR '>>>', TWO_POINT_SUB_LEFT_LENGTH
+1041.              
+1042.  317 3D2324  BLOW_UP_MSG:		.CHAR '=#$%&%$#=-', BOOM_LENGTH
+      318 252625
+      319 24233D
+      31A 2D2020
+1043.  31B 47414D  GAMEOVER_MSG:		.CHAR 'GAME OVER! YOU LOSE!', GAMEOVER_LENGTH
+      31C 45204F
+      31D 564552
+      31E 212059
+      31F 4F5520
+      320 4C4F53
+      321 452120
+1044.              
+1045.  322 202020  EXPLOSION_1:	.CHAR '          _ ._  _ , _ ._         ', EXPLOSION_1_LENGTH
+      323 202020
+      324 202020
+      325 205F20
+      326 2E5F20
+      327 205F20
+      328 2C205F
+      329 202E5F
+      32A 202020
+      32B 202020
+      32C 202020
+1046.  32D 202020  EXPLOSION_2:	.CHAR '        (_ " ( `  )_  .__)       ', EXPLOSION_2_LENGTH
+      32E 202020
+      32F 202028
+      330 5F2022
+      331 202820
+      332 602020
+      333 295F20
+      334 202E5F
+      335 5F2920
+      336 202020
+      337 202020
+1047.  338 202020  EXPLOSION_3:	.CHAR '      ( (  (    )   `)  ) _)     ', EXPLOSION_3_LENGTH
+      339 202020
+      33A 282028
+      33B 202028
+      33C 202020
+      33D 202920
+      33E 202060
+      33F 292020
+      340 29205F
+      341 292020
+      342 202020
+1048.  343 202020  EXPLOSION_4:	.CHAR '     (__ (_   (_ . _) _) ,__)    ', EXPLOSION_4_LENGTH
+      344 202028
+      345 5F5F20
+      346 285F20
+      347 202028
+      348 5F202E
+      349 205F29
+      34A 205F29
+      34B 202C5F
+      34C 5F2920
+      34D 202020
+1049.  34E 202020  EXPLOSION_5:	.CHAR '         `~~`\\ " . /`~~`         ', EXPLOSION_5_LENGTH
+      34F 202020
+      350 202020
+      351 607E7E
+      352 605C20
+      353 22202E
+      354 202F60
+      355 7E7E60
+      356 202020
+      357 202020
+      358 202020
+      359 202020
+1050.  359 202020  EXPLOSION_6:	.CHAR '              ;   ;              ', EXPLOSION_6_LENGTH
+      35A 202020
+      35B 202020
+      35C 202020
+      35D 20203B
+      35E 202020
+      35F 3B2020
+      360 202020
+      361 202020
+      362 202020
+      363 202020
+1051.  364 202020  EXPLOSION_7:	.CHAR '              /   \\              ', EXPLOSION_7_LENGTH
+      365 202020
+      366 202020
+      367 202020
+      368 20202F
+      369 202020
+      36A 5C2020
+      36B 202020
+      36C 202020
+      36D 202020
+      36E 202020
+      36F 7E7E7E
+1052.  36F 7E7E7E  EXPLOSION_8:	.CHAR '~~~~~~~~~~~~~/_ __ \\~~~~~~~~~~~~~', EXPLOSION_8_LENGTH
+      370 7E7E7E
+      371 7E7E7E
+      372 7E7E7E
+      373 7E2F5F
+      374 205F5F
+      375 205C7E
+      376 7E7E7E
+      377 7E7E7E
+      378 7E7E7E
+      379 7E7E7E
+      37A FFFFFFFFFFFFFFFF
+1053.              
+1054.              ;------------------------------------------------------------------------------------------------------------
+1055.              ; setting up timer and keyboard ISR
+1056.              		.EQU 	@,$FFB
+1057.  FFB 0000C0  		.WORD	TIMER_ISR
+1058.              
+1059.              		.EQU	@,$FF8
+1060.  FF8 000057  		.WORD	KEYBD_ISR
+1061.              		.END
+
+                     SYMBOL TABLE CONTENTS
+
+000297 = BLOCKED         000317 = BLOW_UP_MSG     00000A = BOOM_LENGTH     
+0002DD = BOOM_LOOP_MSG   00015A = BOTTOM_LINE_CHECK000313 = BOTTOM_RIGHT    
+00000A = CHARGE_DELAY    0002EC = CLEAN_UP_BOOM   0002F0 = CLEAN_UP_LOOP   
+000001 = CLEAR_DISPLAY   000316 = CRT_CNTL        000026 = CRT_COLS        
+000317 = CRT_DATA        000198 = CRT_FIFTH_ROW   000100 = CRT_FIRST_ROW   
+000172 = CRT_FOURTH_ROW  00000E = CRT_ROWS        000126 = CRT_SECOND_ROW  
+0001B8 = CRT_SIXTH_ROW   000278 = CRT_SWAP        00014C = CRT_THIRD_ROW   
+000314 = CRT_XREG        000315 = CRT_YREG        0002F8 = DELAY           
+000020 = DISABLE_AND_STOP000000 = DISABLE_INTERRUPTS000055 = DONE_INC_LEVEL  
+0002C0 = DONE_INC_SCORE  0001A6 = DONE_MOVING     0000C0 = ENABLE_AND_RESET
+0000B0 = ENABLE_AND_START0000D0 = ENABLE_RESET_AND_START000137 = ENTERING_LEFT   
+00011C = ENTERING_RIGHT  000322 = EXPLOSION_1     000021 = EXPLOSION_1_LENGTH
+00032D = EXPLOSION_2     000021 = EXPLOSION_2_LENGTH000338 = EXPLOSION_3     
+000021 = EXPLOSION_3_LENGTH000343 = EXPLOSION_4     000021 = EXPLOSION_4_LENGTH
+00034E = EXPLOSION_5     000021 = EXPLOSION_5_LENGTH000359 = EXPLOSION_6     
+000021 = EXPLOSION_6_LENGTH000364 = EXPLOSION_7     000021 = EXPLOSION_7_LENGTH
+00036F = EXPLOSION_8     000021 = EXPLOSION_8_LENGTH0000E7 = EXPLOSION_LOOP  
+000145 = FAST_ENTERING_LEFT00012C = FAST_ENTERING_RIGHT00021A = FAST_LEFT_WALL  
+00024C = FAST_RIGHT_WALL 000266 = FIND_ENEMY_SUB  000014 = GAMEOVER_LENGTH 
+00031B = GAMEOVER_MSG    0000DE = GAME_OVER       000E01 = GET_NUM         
+000002 = HIT_SUB_POS     0002F9 = I               000043 = INCREASE_LEVEL  
+0002B1 = INCREASE_SCORE  000080 = INTERRUPT_ENA   0002FA = J               
+000000 = KBD_CNTL        000001 = KBD_DATA        000040 = KBD_FLUSH       
+000000 = KBD_STAT        000057 = KEYBD_ISR       0000B9 = KEY_DONE        
+000005 = LEFT_BORDER     000066 = LEFT_CHARGE     0001E7 = LEFT_DIRECTION_SUB
+0001F6 = LEFT_SHIFT      000223 = LEFT_SHIFT_DONE 000210 = LEFT_WALL       
+0001F0 = LEFT_WALL_ATE   000305 = LEVEL           0002FE = LEVEL_CNT       
+00011A = LEVEL_COUNTER   000007 = LEVEL_LENGTH    0002D3 = LOOP_DESTROY    
+0001D3 = LOOP_MV_SUB_L   0002E7 = LOOP_ONE        00003B = MAIN            
+00026F = MAKE_ENEMY_BOMB 000259 = MAKE_ENEMY_CHARGES000274 = MAKE_MINES_DONE 
+000100 = MAKE_SUB        00014D = MAKE_SUB_DONE   000154 = MOVE_CHARGES    
+0001A8 = MOVE_DONE       000166 = MOVE_DOWN       000078 = MOVE_SHIP_LEFT  
+000099 = MOVE_SHIP_RIGHT 0001AD = MOVE_SUBS       0001F1 = MOVE_SUBS_DONE  
+0001D1 = MOVE_SUBS_LEFT  0001B3 = MOVE_SUBS_RIGHT 00017D = MOVE_UP         
+000196 = MOVE_UP_LOOP    000082 = MV_SHIP_LEFT_LOOP_1000090 = MV_SHIP_LEFT_LOOP_2
+0000A3 = MV_SHIP_RIGHT_LOOP_10000B1 = MV_SHIP_RIGHT_LOOP_2000192 = NOT_HIT         
+0000CC = NOT_MAKE_SUBS   000283 = NO_BLOCK        000298 = NO_BLOCK_DONE   
+00028C = NO_BLOCK_LOOP   000312 = ONE_POINT_SUB_LEFT000007 = ONE_POINT_SUB_LEFT_LENGTH
+00030F = ONE_POINT_SUB_RIGHT000007 = ONE_POINT_SUB_RIGHT_LENGTH000113 = OPEN_ROUTE      
+000E08 = PUT_CHR         000E06 = PUT_NL          000E00 = PUT_NUM         
+000E07 = PUT_NUM2        000E05 = PUT_STR         00029C = RANDOM          
+000002 = RANDOMMAX       000002 = RANDOMMAXD      0002A7 = RANDOM_TIMER    
+000040 = RESET_READY_BIT 000020 = RIGHT_BORDER    00006F = RIGHT_CHARGE    
+0001C6 = RIGHT_DIRECTION_SUB000228 = RIGHT_SHIFT     000254 = RIGHT_SHIFT_DONE
+000242 = RIGHT_WALL      0001D0 = RIGHT_WALL_ATE  000302 = SCORE           
+000301 = SCORE_CNT       000107 = SCORE_COUNTER   000007 = SCORE_LENGTH    
+0002FD = SEED            000011 = SETUP_LEVEL     000007 = SETUP_SCORE     
+000205 = SHIFT_LEFT      000237 = SHIFT_RIGHT     0001EA = SHIFT_SUB_LEFT  
+0001C9 = SHIFT_SUB_RIGHT 0002FB = SHIP_CURR_POS   00001E = SHIP_ROW_1      
+000027 = SHIP_ROW_2      000308 = SHIP_ROW_ONE    000008 = SHIP_ROW_ONE_LENGTH
+00030B = SHIP_ROW_TWO    00000B = SHIP_ROW_TWO_LENGTH000005 = SHIP_SIZE_OFFSET
+0000D5 = SKIP_SUBS       00013C = SLOW_ENTERING_LEFT000121 = SLOW_ENTERING_RIGHT
+000201 = SLOW_LEFT       00020C = SLOW_LEFT_WALL  000233 = SLOW_RIGHT      
+00023E = SLOW_RIGHT_WALL 000010 = START_AFTER_LOAD000300 = SUB_COUNT       
+000005 = SUB_DELAY       0002CA = SUB_DESTROYED   0002FF = SUB_LIMIT       
+0002FC = TIMER           0000D9 = TIMER_DONE      0000C0 = TIMER_ISR       
+000030 = TIM_CNTL        000034 = TIM_COUNT       000030 = TIM_STAT        
+000031 = TIM_VALUE       00017F = TOP_LINE_CHECK  0001C3 = TWO_POINT_LEFT  
+0001E3 = TWO_POINT_RIGHT 000316 = TWO_POINT_SUB_LEFT000003 = TWO_POINT_SUB_LEFT_LENGTH
+000315 = TWO_POINT_SUB_RIGHT000003 = TWO_POINT_SUB_RIGHT_LENGTH000002 = U               
+000003 = V               000100 = VIDEO_MEMORY    00002F = WATER_SURFACE   
+000002 = Y               

@@ -1,0 +1,1053 @@
+		.EQU KBD_CNTL,  	$000
+		.EQU KBD_STAT,  	$000
+		.EQU KBD_DATA,  	$001
+		.EQU KBD_FLUSH, 	$40
+
+		.EQU TIM_CNTL,      	$030
+		.EQU TIM_STAT,      	$030
+		.EQU TIM_VALUE,     	$031
+		.EQU TIM_COUNT,     	$034
+         
+		.EQU INTERRUPT_ENA,           $80
+		.EQU RESET_READY_BIT,         $40
+		.EQU START_AFTER_LOAD,        $10
+		.EQU ENABLE_RESET_AND_START,  $D0
+		.EQU ENABLE_AND_RESET,        $C0
+		.EQU DISABLE_AND_STOP,	     $20
+		.EQU ENABLE_AND_START,	     $B0
+
+		.EQU VIDEO_MEMORY,    	$100
+		.EQU CRT_FIRST_ROW, 	$100
+		.EQU CRT_SECOND_ROW,	$126
+		.EQU CRT_THIRD_ROW,		$14C
+		.EQU CRT_FOURTH_ROW,	$172
+		.EQU CRT_FIFTH_ROW,		$198
+		.EQU CRT_SIXTH_ROW,		$1B8
+		
+		.EQU BOTTOM_RIGHT,		$313
+
+		.EQU CRT_XREG,      	$314
+		.EQU CRT_YREG,      	$315
+
+		.EQU CRT_CNTL,      	$316
+		.EQU CRT_DATA,      	$317
+		.EQU CRT_ROWS,      	$0E
+		.EQU CRT_COLS,      	$26
+          		.EQU CLEAR_DISPLAY, 	$01
+
+		.EQU PUT_NUM,       	$E00      	; MINI_OS JSRS
+		.EQU GET_NUM,       	$E01
+		.EQU PUT_STR,       	$E05
+		.EQU PUT_NL,        	$E06
+		.EQU PUT_NUM2,      	$E07
+		.EQU PUT_CHR,       	$E08
+
+		.EQU SCORE_COUNTER,		$107
+		.EQU LEVEL_COUNTER,		$11A
+
+		.EQU CHARGE_DELAY,		10	; number of iteration before the charges move
+		.EQU SUB_DELAY,		5	; number of iteration before the subs move
+		
+;------------------------------------------------------------------------------------------------------------
+; set up the playground
+		
+		
+		LDS#	$E00
+		CIE	
+
+		LDA#	CLEAR_DISPLAY
+		OUTB	CRT_CNTL
+		
+		LDX#	0
+		LDA#	VIDEO_MEMORY
+		STA	I
+		
+SETUP_SCORE:		LDC	SCORE
+		OUTB*	I
+		INC	I
+		ADX#	1
+		CMX#	SCORE_LENGTH
+		JNE	SETUP_SCORE
+
+		LDX#	0
+		LDA#	VIDEO_MEMORY
+		ADA#	19
+		STA	I
+
+SETUP_LEVEL:		LDC	LEVEL
+		OUTB*	I
+		INC	I
+		ADX#	1
+		CMX#	LEVEL_LENGTH
+		JNE	SETUP_LEVEL
+
+		LDA#	'1'
+		OUTB	LEVEL_COUNTER
+	
+		LDA#	'0'
+		OUTB	SCORE_COUNTER
+
+		LDX#	0
+		LDA#	CRT_SECOND_ROW
+		STA	I
+
+SHIP_ROW_1:		LDC	SHIP_ROW_ONE
+		OUTB*	I
+		INC	I
+		ADX#	1
+		CMX#	SHIP_ROW_ONE_LENGTH
+		JNE	SHIP_ROW_1
+
+		LDX#	0
+		LDA#	CRT_THIRD_ROW
+		STA	I
+
+SHIP_ROW_2:		LDC	SHIP_ROW_TWO
+		OUTB*	I
+		INC	I
+		ADX#	1
+		CMX#	SHIP_ROW_TWO_LENGTH
+		JNE	SHIP_ROW_2
+		
+		LDX#	0
+		LDA#	'~'
+WATER_SURFACE:		OUTB+	CRT_FOURTH_ROW
+		AOC#	38
+		JNE	WATER_SURFACE
+
+		LDA#	5		; at 6 start from left
+		STA	SHIP_CURR_POS
+
+		LDA#	ENABLE_AND_RESET	; make keyboard ready
+		OUTB	KBD_CNTL
+
+		LDA	DELAY		; start the timer
+		OUTW	TIM_VALUE
+		LDA#	ENABLE_RESET_AND_START
+		OUTB	TIM_CNTL
+		
+		SIE
+;------------------------------------------------------------------------------------------------------------
+; game runs through the timer interrupt, so main program will be doing nothing
+MAIN:		LDA	SUB_COUNT
+		CMA#	0		; do not inc Lv untill all subs are eliminated
+		JNE	MAIN
+		LDA	SUB_LIMIT
+		CMA	LEVEL_CNT	; do not inc Lv untill # of level of subs appeared
+		JNE	MAIN
+		JSR	INCREASE_LEVEL
+		JMP	MAIN	
+
+;------------------------------------------------------------------------------------------------------------
+;increase level	
+
+INCREASE_LEVEL:	BGN#	0
+		LDA	SUB_COUNT	; another layer of control
+		CMA#	0
+		JNE	DONE_INC_LEVEL
+		LDA	SUB_LIMIT
+		CMA	LEVEL_CNT
+		JNE	DONE_INC_LEVEL
+		INC	LEVEL_CNT
+		
+		LDA#	1		; increase the level displayed on the screen
+		OUTB	CRT_YREG
+		LDA#	$1A + 1
+		OUTB	CRT_XREG
+		LDA	LEVEL_CNT
+		JSR	PUT_NUM
+		LDA#	39
+		OUTB	CRT_XREG
+		CLR	SUB_LIMIT	; each level start with 1 subs
+		JSR	MAKE_SUB
+		
+DONE_INC_LEVEL:	FIN#	0
+		RTN
+
+;--------------------------------------------------------------------------------------------------------------
+;keyboard ISR
+		.EQU DISABLE_INTERRUPTS,	$00
+		.EQU SHIP_SIZE_OFFSET,	$5
+		.EQU LEFT_BORDER,		$5
+		.EQU RIGHT_BORDER,		$20
+		
+
+KEYBD_ISR:		PSHA
+		PSHX
+		PSH	I
+		PSH	J
+
+		LDA#	DISABLE_INTERRUPTS
+		OUTB	KBD_CNTL
+		INB	KBD_DATA
+		CMA#	'h'
+		JEQ	MOVE_SHIP_LEFT
+		CMA#	'l'
+		JEQ	MOVE_SHIP_RIGHT
+		CMA#	'j'
+		JEQ	LEFT_CHARGE
+		CMA#	'k'
+		JEQ	RIGHT_CHARGE
+
+LEFT_CHARGE:		LDA	SHIP_CURR_POS
+		SBA#	SHIP_SIZE_OFFSET
+		ADA#	CRT_FIFTH_ROW
+		PSHA
+		TSF			; use stack to hold temp
+
+		LDA#	'v'
+		OUTB*	! 0
+		ADS#	1		; pop the used
+		JMP	KEY_DONE
+
+RIGHT_CHARGE:		LDA	SHIP_CURR_POS
+		ADA#	SHIP_SIZE_OFFSET
+		ADA#	CRT_FIFTH_ROW
+		PSHA
+		TSF
+		LDA#	'v'
+		OUTB*	! 0
+		ADS#	1
+		JMP	KEY_DONE
+
+MOVE_SHIP_LEFT:	LDA	SHIP_CURR_POS
+		CMA#	LEFT_BORDER
+		JEQ	KEY_DONE
+
+		LDA#	CRT_SECOND_ROW
+		ADA	SHIP_CURR_POS
+		SBA#	3
+		STA	I
+		SBA#	1
+		STA	J
+
+		LDX#	5		; loop 6 times
+MV_SHIP_LEFT_LOOP_1:	PSH	I
+		PSH	J
+		JSR	CRT_SWAP
+		ADS#	2
+		INC	I
+		INC	J
+		SOJ	MV_SHIP_LEFT_LOOP_1				
+
+		LDA#	CRT_THIRD_ROW	; I points to head of the ship
+		ADA	SHIP_CURR_POS
+		SBA#	SHIP_SIZE_OFFSET
+		STA	I
+
+		SBA#	1
+		STA	J		; J points to 1 before head of the ship
+
+		LDX#	10		; loop 11 times
+MV_SHIP_LEFT_LOOP_2:	PSH	I
+		PSH	J
+		JSR	CRT_SWAP
+		ADS#	2
+		INC	I
+		INC	J
+		SOJ	MV_SHIP_LEFT_LOOP_2
+		DEC	SHIP_CURR_POS
+		JMP	KEY_DONE
+
+MOVE_SHIP_RIGHT:	LDA	SHIP_CURR_POS
+		CMA#	RIGHT_BORDER
+		JEQ	KEY_DONE
+
+		LDA#	CRT_SECOND_ROW
+		ADA	SHIP_CURR_POS
+		ADA#	2
+		STA	I
+		ADA#	1
+		STA	J
+
+		LDX#	5		; loop 6 times
+MV_SHIP_RIGHT_LOOP_1:	PSH	I
+		PSH	J
+		JSR	CRT_SWAP
+		ADS#	2
+		DEC	I
+		DEC	J
+		SOJ	MV_SHIP_RIGHT_LOOP_1				
+
+		LDA#	CRT_THIRD_ROW	; I points to tail of the ship
+		ADA	SHIP_CURR_POS
+		ADA#	SHIP_SIZE_OFFSET
+		STA	I
+
+		ADA#	1
+		STA	J		; J points to 1 pass tail of the ship
+
+		LDX#	10		; loop 11 times
+MV_SHIP_RIGHT_LOOP_2:PSH	I
+		PSH	J
+		JSR	CRT_SWAP
+		ADS#	2
+		DEC	I
+		DEC	J
+		SOJ	MV_SHIP_RIGHT_LOOP_2
+		INC	SHIP_CURR_POS
+		
+
+KEY_DONE:		POP	J
+		POP	I
+		LDA#	ENABLE_AND_RESET
+		OUTB	KBD_CNTL
+		POPX
+		POPA
+		IRTN
+
+;--------------------------------------------------------------------------------------------------------------
+TIMER_ISR:		CIE
+		PSHA
+		INC	TIMER
+;---------------------------------------------------------------------------
+;random entering subs
+		LDA	SUB_LIMIT
+		CMA	LEVEL_CNT
+		JEQ	NOT_MAKE_SUBS	; not making new subs if sub_limit = level_count
+		
+		PSH#	1000
+		JSR	RANDOM_TIMER
+		ADS#	1
+		CMA#	0
+		JNE	NOT_MAKE_SUBS
+		JSR	MAKE_SUB
+;---------------------------------------------------------------------------		
+NOT_MAKE_SUBS:		LDA	TIMER
+		CMA#	SUB_DELAY
+		JNE	SKIP_SUBS
+		LDA	SUB_COUNT
+		CMA#	0
+		JEQ	SKIP_SUBS	
+		JSR	MOVE_SUBS
+		JSR	MAKE_ENEMY_CHARGES
+		LDA	TIMER
+
+SKIP_SUBS:		CMA#	CHARGE_DELAY
+		JNE	TIMER_DONE
+		JSR	MOVE_CHARGES
+		CLR	TIMER		; start new iteration
+		
+
+TIMER_DONE:		LDA#	ENABLE_AND_RESET
+		OUTB	TIM_CNTL
+		POPA
+
+		SIE
+		IRTN
+
+;--------------------------------------------------------------------------------------------------------------
+GAME_OVER:		CIE
+		
+		LDS#	$E00
+
+		LDA#	CLEAR_DISPLAY
+		OUTB	CRT_CNTL
+
+		LDA#	2
+		OUTB	CRT_XREG
+		LDX#	1
+		LDA#	EXPLOSION_1	; starting address of explosions
+		STA	I
+
+EXPLOSION_LOOP:	LDA#	2
+		OUTB	CRT_XREG
+
+		TXA
+		OUTB	CRT_YREG
+
+		PSH#	EXPLOSION_1_LENGTH		; push the str_len
+		PSH	I		; push the address of the explosions
+		JSR	PUT_STR
+		ADS#	2
+
+		LDA	I
+		ADA#	$34 - $29
+		STA	I
+
+		ADX#	1
+		CMX#	9
+		JNE	EXPLOSION_LOOP
+
+		LDA#	10
+		OUTB	CRT_YREG
+		LDA#	10
+		OUTB	CRT_XREG
+
+		PSH#	GAMEOVER_LENGTH
+		PSH#	GAMEOVER_MSG
+		JSR	PUT_STR
+		ADS#	2
+		LDA#	39
+		OUTB	CRT_XREG
+		HLT
+
+;--------------------------------------------------------------------------------------------------------------
+
+MAKE_SUB:		BGN#	0
+		PSHA
+		PSH	J
+		PSH	I
+
+		INC	SUB_COUNT
+		INC	SUB_LIMIT	; not making new subs when limit reaches
+		
+
+		PSH#	8
+		JSR	RANDOM_TIMER
+		ADS#  	1
+
+		ADA#	6		; starting at sixth row
+		STA	J		; J = TEMP_Y, sub_entering height
+
+		PSH	J
+		JSR	NO_BLOCK
+		ADS#	1
+		CMA#	1
+		JEQ	OPEN_ROUTE	; 1 = no block
+		DEC	SUB_COUNT
+		DEC	SUB_LIMIT
+		JMP	MAKE_SUB_DONE	
+
+OPEN_ROUTE:		PSH#	1		; random 0/1
+		JSR	RANDOM_TIMER
+		ADS#	1
+		MUL#	37
+		ADA#	1
+
+		STA	I		; I = horizontal offset
+		CMA#	38
+		JEQ	ENTERING_RIGHT; Entering right
+		JMP	ENTERING_LEFT ; Entering left
+		
+ENTERING_RIGHT:	LDA	SUB_LIMIT	; choose fast or slow sub: sub_limit mod 2, 0=slow 1=fast
+		MOD#	2
+		CMA#	0
+		JEQ	SLOW_ENTERING_RIGHT
+		JMP	FAST_ENTERING_RIGHT
+
+SLOW_ENTERING_RIGHT:	LDA	J
+		OUTB	CRT_YREG
+		LDA	I
+		SBA#	ONE_POINT_SUB_RIGHT_LENGTH
+		STA	I
+		OUTB	CRT_XREG
+		PSH#	ONE_POINT_SUB_RIGHT_LENGTH
+		PSH#	ONE_POINT_SUB_RIGHT
+		JSR	PUT_STR
+		ADS#	2
+		JMP 	MAKE_SUB_DONE
+
+FAST_ENTERING_RIGHT:	LDA	J
+		OUTB	CRT_YREG
+		LDA	I
+		SBA#	TWO_POINT_SUB_RIGHT_LENGTH
+		STA	I
+		OUTB	CRT_XREG
+		PSH#	TWO_POINT_SUB_RIGHT_LENGTH
+		PSH#	TWO_POINT_SUB_RIGHT
+		JSR	PUT_STR
+		ADS#	2
+		JMP 	MAKE_SUB_DONE
+;----------------------------------------------------------------------------------------
+
+ENTERING_LEFT:		LDA	SUB_LIMIT	; choose fast or slow sub: sub_limit mod 2, 0=slow 1=fast
+		MOD#	2
+		CMA#	0
+		JEQ	SLOW_ENTERING_LEFT
+		JMP	FAST_ENTERING_LEFT
+
+SLOW_ENTERING_LEFT:	LDA	J
+		OUTB	CRT_YREG
+		LDA	I
+		OUTB	CRT_XREG
+		PSH#	ONE_POINT_SUB_LEFT_LENGTH
+		PSH#	ONE_POINT_SUB_LEFT
+		JSR	PUT_STR
+		ADS#	2
+		JMP	MAKE_SUB_DONE
+
+FAST_ENTERING_LEFT:  LDA	J
+		OUTB	CRT_YREG
+		LDA	I
+		OUTB	CRT_XREG
+		PSH#	TWO_POINT_SUB_LEFT_LENGTH
+		PSH#	TWO_POINT_SUB_LEFT
+		JSR	PUT_STR
+		ADS#	2
+
+MAKE_SUB_DONE:		LDA#	39
+		OUTB	CRT_XREG
+
+		POP	I
+		POP	J
+		POPA
+		FIN#	0
+		RTN
+
+;--------------------------------------------------------------------------------------------------------------
+;move_charges (move the charges)
+
+MOVE_CHARGES:		BGN#	0
+		PSHA
+		PSH	I
+		PSH	J
+		
+		LDA#	BOTTOM_RIGHT
+		STA	I
+BOTTOM_LINE_CHECK:	LDA	I
+		CMA#	BOTTOM_RIGHT - 38	; right end of second last line
+		JLE	MOVE_DOWN
+		INB*	I
+		DEC	I
+		CMA#	'v'
+		JNE	BOTTOM_LINE_CHECK
+		INC	I
+		LDA#	' '
+		OUTB*	I
+		DEC	I
+		JMP	BOTTOM_LINE_CHECK
+
+
+MOVE_DOWN:		LDA	I
+		CMA#	CRT_FIFTH_ROW	; scan the screen from bottom right to the left end of fifth row, check for charges, and move them one row below
+		JLT	MOVE_UP
+		INB*	I
+		DEC	I
+		CMA#	'v'
+		JNE	MOVE_DOWN
+
+		INC	I
+		LDA	I
+		ADA#	38
+		STA	J
+		INB*	J
+		CMA# 	'>'	
+		JEQ	SUB_DESTROYED
+		CMA# 	'<'	
+		JEQ	SUB_DESTROYED
+		CMA# 	'*'	
+		JEQ	SUB_DESTROYED
+		PSH	I
+		PSH	J
+		JSR	CRT_SWAP
+		ADS#	2
+		JMP	MOVE_DOWN
+
+MOVE_UP:		LDA#	CRT_FIFTH_ROW
+		STA	I
+
+TOP_LINE_CHECK:		LDA	I
+		CMA#	CRT_FIFTH_ROW + 38
+		JGT	MOVE_UP_LOOP
+		INB*	I
+		INC	I
+		CMA#	'^'
+		JNE	TOP_LINE_CHECK
+		DEC	I
+
+		LDA	I		; check if ship hit
+		SBA#	CRT_FIFTH_ROW
+		STA	J		; enemy charge X-pos
+		LDA	SHIP_CURR_POS
+		SBA#	SHIP_SIZE_OFFSET
+		CMA	J
+		JGT	NOT_HIT
+		ADA#	2 * SHIP_SIZE_OFFSET
+		CMA	J
+		JLT	NOT_HIT
+		JMP	GAME_OVER	
+
+NOT_HIT:		LDA#	' '
+		OUTB*	I
+		INC	I
+		JMP	TOP_LINE_CHECK
+
+
+MOVE_UP_LOOP:		LDA	I
+		CMA#	BOTTOM_RIGHT	; scan the screen from bottom right to the left end of fifth row, check for charges, and move them one row below
+		JGT	MOVE_DONE
+		INB*	I
+		INC	I
+		CMA#	'^'
+		JNE	MOVE_UP_LOOP
+
+		DEC	I
+		LDA	I
+		SBA#	38
+		STA	J
+		
+		PSH	I
+		PSH	J
+		JSR	CRT_SWAP
+		ADS#	2
+		JMP	MOVE_UP_LOOP
+
+DONE_MOVING:		DEC	I
+		JMP	MOVE_DOWN
+		
+MOVE_DONE:		POP	J
+		POP	I
+		POPA
+		FIN#	0
+		RTN
+;-------------------------------------------------------------------------------------------------------------
+; move_subs	(move the submarines)
+MOVE_SUBS:		BGN#	0
+		PSH	I
+		PSH	J
+		PSHA
+
+		LDA#	BOTTOM_RIGHT
+		STA	I
+		
+MOVE_SUBS_RIGHT:	LDA	I
+		CMA#	CRT_FIFTH_ROW	; scan the screen from bottom right to the left end of fifth row
+		JLT	MOVE_SUBS_LEFT
+		INB*	I
+		DEC	I
+		CMA#	'>'
+		JEQ	SHIFT_SUB_RIGHT
+		CMA#	'<'
+		JNE	RIGHT_DIRECTION_SUB
+
+		INB*	I		; skip over this sub
+		CMA#	'<'
+		JEQ	TWO_POINT_LEFT
+
+		LDA	I
+		SBA#	ONE_POINT_SUB_LEFT_LENGTH - 1
+		STA	I
+		JMP	MOVE_SUBS_RIGHT
+
+TWO_POINT_LEFT:	LDA	I
+		SBA#	2
+		JMP	MOVE_SUBS_RIGHT
+
+RIGHT_DIRECTION_SUB:	CMA#	'*'
+		JEQ	SHIFT_SUB_RIGHT
+		JMP	MOVE_SUBS_RIGHT
+
+SHIFT_SUB_RIGHT:	JSR	RIGHT_SHIFT	; return 1 position after the sub
+		STA	I
+		ADA#	1
+		SBA#	$100
+		MOD#	38
+		JNE	RIGHT_WALL_ATE
+		DEC	SUB_COUNT	
+RIGHT_WALL_ATE:	JMP	MOVE_SUBS_RIGHT
+
+;-----------------------------------------------------------------------------------------
+
+MOVE_SUBS_LEFT:	LDA#	CRT_FIFTH_ROW	; scan the screen from fifth row left end to bottom right
+		STA	I
+
+LOOP_MV_SUB_L:		LDA	I
+		CMA#	BOTTOM_RIGHT	
+		JGT	MOVE_SUBS_DONE
+		INB*	I
+		INC	I
+		CMA#	'<'
+		JEQ	SHIFT_SUB_LEFT
+		CMA#	'>'
+		JNE	LEFT_DIRECTION_SUB
+
+		INB*	I		; skip over this sub
+		CMA#	'>'
+		JEQ	TWO_POINT_RIGHT
+
+		LDA	I
+		ADA#	ONE_POINT_SUB_RIGHT_LENGTH - 1
+		STA	I
+		JMP	LOOP_MV_SUB_L
+
+TWO_POINT_RIGHT:	LDA	I
+		ADA#	2
+		STA	I
+		JMP	LOOP_MV_SUB_L
+
+LEFT_DIRECTION_SUB:	CMA#	'*'
+		JEQ	SHIFT_SUB_LEFT
+		JMP	LOOP_MV_SUB_L
+
+SHIFT_SUB_LEFT:	JSR	LEFT_SHIFT	; return 1 position after the sub
+		STA	I
+		SBA#	$100
+		MOD#	38
+		JNE	LEFT_WALL_ATE
+		DEC	SUB_COUNT	
+LEFT_WALL_ATE:		JMP	LOOP_MV_SUB_L
+		
+MOVE_SUBS_DONE:	POPA
+		POP	J
+		POP	I
+		FIN#	0
+		RTN
+;-------------------------------------------------------------------------------------------------------------
+;LEFT_SHIFT
+LEFT_SHIFT:		BGN#	0
+		PSH	I
+		PSH	J
+
+		INB*	I
+		CMA#	'*'
+		JEQ	SLOW_LEFT
+		DEC	I
+		LDA	I
+		SBA#	2
+		STA	J		; J = I - 2
+		JMP	SHIFT_LEFT
+		
+SLOW_LEFT:		DEC	I
+		LDA	I
+		SBA#	1
+		STA	J		; J = I - 1
+
+SHIFT_LEFT:		SBA#	$100
+		MOD#	38
+		CMA#	37
+		JEQ	SLOW_LEFT_WALL
+		CMA#	36
+		JEQ	FAST_LEFT_WALL
+		JMP	LEFT_WALL
+
+SLOW_LEFT_WALL:		LDA#	' '
+		OUTB*	I
+		INC	I
+		INC	J
+	
+LEFT_WALL:		INB*	I
+		CMA#	' '
+		JEQ	LEFT_SHIFT_DONE
+
+		PSH	I
+		PSH	J
+		JSR	CRT_SWAP
+		ADS#	2
+
+		INC	I
+		INC	J
+		JMP	LEFT_WALL
+
+FAST_LEFT_WALL:		LDA#	' '
+		OUTB*	I
+		INC	I
+		INC	J
+
+		LDA#	' '
+		OUTB*	I
+		INC	I
+		INC	J
+		JMP	LEFT_WALL	
+		
+LEFT_SHIFT_DONE:	LDA	J
+		POP	J
+		POP	I		
+		FIN#	0
+		RTN
+;-------------------------------------------------------------------------------------------------------------
+;RIGHT_SHIFT (move the sub right 1 spot)
+RIGHT_SHIFT:		BGN#	0
+		PSH	I
+		PSH	J
+		
+		INB*	I
+		CMA#	'*'
+		JEQ	SLOW_RIGHT
+		INC	I
+		LDA	I
+		ADA#	2
+		STA	J		; J = I + 2
+		JMP	SHIFT_RIGHT
+
+SLOW_RIGHT:		INC	I
+		LDA	I
+		ADA#	1
+		STA	J		; J = I + 1
+
+SHIFT_RIGHT:		SBA#	$100
+		MOD#	38
+		CMA#	0
+		JEQ	SLOW_RIGHT_WALL
+		CMA#	1
+		JEQ	FAST_RIGHT_WALL
+		JMP	RIGHT_WALL
+
+SLOW_RIGHT_WALL:	LDA#	' '
+		OUTB*	I
+		DEC	I
+		DEC	J
+	
+RIGHT_WALL:		INB*	I
+		CMA#	' '
+		JEQ	RIGHT_SHIFT_DONE
+
+		PSH	I
+		PSH	J
+		JSR	CRT_SWAP
+		ADS#	2
+
+		DEC	I
+		DEC	J
+		JMP	RIGHT_WALL
+
+FAST_RIGHT_WALL:	LDA#	' '		; shift two place once, eat two once
+		OUTB*	I
+		DEC	I
+		DEC	J
+
+		LDA#	' '
+		OUTB*	I
+		DEC	I
+		DEC	J
+
+RIGHT_SHIFT_DONE:	LDA	J
+		POP	J
+		POP	I		
+		FIN#	0
+		RTN
+
+;--------------------------------------------------------------------------------------------------------------
+; make_enemy_charges
+MAKE_ENEMY_CHARGES: BGN#	0
+	     PSH	I
+	     PSH	J
+
+		PSH#	10
+		JSR	RANDOM_TIMER
+		ADS#	1
+		CMA#	0
+		JNE	MAKE_MINES_DONE
+		LDA	SUB_COUNT
+		CMA#	0
+		JEQ	MAKE_MINES_DONE
+
+	     LDA#	BOTTOM_RIGHT
+	     STA	I
+FIND_ENEMY_SUB:  LDA	I
+	     CMA#	CRT_SIXTH_ROW
+	     INB*	I
+	     DEC	I
+	     CMA#	'>'
+	     JEQ	MAKE_ENEMY_BOMB
+	     CMA#	'<'
+	     JEQ	MAKE_ENEMY_BOMB
+	     JMP	FIND_ENEMY_SUB
+
+MAKE_ENEMY_BOMB: LDA	I
+	     SBA#	38
+	     STA	I
+	     LDA#   	'^'
+	     OUTB*	I
+
+MAKE_MINES_DONE:    POP	J
+	     POP	I
+	     FIN#	0
+	     RTN
+
+;--------------------------------------------------------------------------------------------------------------
+;crt_swap(U,V)
+		.EQU U,	2
+		.EQU V,	3
+CRT_SWAP:		BGN#	0
+		PSHA
+		INB*	! U
+		PSHA	
+		INB*	! V
+		OUTB*	! U
+		POPA	
+		OUTB*	! V
+		POPA
+		FIN#	0
+		RTN
+
+;------------------------------------------------------------------------------------------------------------
+; No Block on y
+		.EQU Y, 2
+NO_BLOCK:		BGN#	0
+		PSHX
+		PSH	I
+
+		LDA	! Y
+		SBA#	1
+		MUL#	38
+		ADA#	$100
+		STA	I
+
+		LDX#	37		; loop 38 times
+NO_BLOCK_LOOP:		INB*	I
+		CMA#	'<'
+		JEQ	BLOCKED
+		CMA#	'>'
+		JEQ	BLOCKED
+		CMA#	'*'
+		JEQ	BLOCKED
+		INC	I	
+		SOJ	NO_BLOCK_LOOP
+		LDA#	1		; checked, no block
+		JMP	NO_BLOCK_DONE
+
+BLOCKED:		LDA#	0
+NO_BLOCK_DONE:		POP	I
+		POPX
+		FIN#	0
+		RTN
+
+;-------------------------------------------------------------------------------------------------------------
+		.EQU	randomMax, 2
+RANDOM:		BGN#	0
+		LDA	SEED
+		MUL#	2779
+		ADA#	1997
+		MOD#	2048
+		STA	SEED
+		INC !	randomMax
+		MOD !	randomMax
+		ADA#  	4
+		FIN#	0
+		RTN
+
+;-------------------------------------------------------------------------------------------------------------
+		.EQU	randomMaxD, 2
+RANDOM_TIMER:		BGN#	0
+		LDA	SEED
+		MUL#	2779
+		ADA#	1997
+		MOD#	2048
+		STA	SEED
+		INC !	randomMaxD
+		MOD !	randomMaxD
+		FIN#	0
+		RTN
+
+;-------------------------------------------------------------------------------------------------------------
+		
+		.EQU HIT_SUB_POS,	2 
+
+INCREASE_SCORE:	BGN#	0
+		INC	SCORE_CNT
+		
+		INB*	! HIT_SUB_POS	; hit which type of sub?
+		CMA#	'*'
+		JEQ	DONE_INC_SCORE
+
+		DEC	! HIT_SUB_POS
+		INB*	! HIT_SUB_POS	; hit which type of sub?
+		CMA#	'*'
+		JEQ	DONE_INC_SCORE
+
+		INC	! HIT_SUB_POS
+		INC	! HIT_SUB_POS
+		INB*	! HIT_SUB_POS	; hit which type of sub?
+		CMA#	'*'
+		JEQ	DONE_INC_SCORE
+		
+		INC	SCORE_CNT
+
+
+		
+DONE_INC_SCORE:	LDA#	1		; increase the level displayed on the screen
+		OUTB	CRT_YREG
+		LDA#	8
+		OUTB	CRT_XREG
+		LDA	SCORE_CNT
+		JSR	PUT_NUM
+		LDA#	39
+		OUTB	CRT_XREG
+		FIN#	0
+		RTN
+
+;-------------------------------------------------------------------------------------------------------------
+; submarine destroyed
+SUB_DESTROYED:		PSH	J
+		JSR	INCREASE_SCORE
+		ADS#	1
+
+		LDA# 	' '
+		OUTB*	I
+		LDX# 	0
+		LDA	J
+		SBA#	5
+		STA	J		
+
+LOOP_DESTROY:	LDA#	' '
+		OUTB*	J
+		INC	J
+		ADX#	1
+		CMX#	10
+		JLT	LOOP_DESTROY
+;----------------------------------------------
+		LDX#	0
+		LDA	J
+		SBA#	5
+		STA	J
+BOOM_LOOP_MSG:	LDC	BLOW_UP_MSG
+		OUTB*	J
+		INC	J
+		ADX#	1
+		CMX#	9
+		JNE	BOOM_LOOP_MSG
+;--------------------------------------------------
+
+		LDA	DELAY
+		MUL#	30
+		TAX
+LOOP_ONE:		SOJ	LOOP_ONE
+
+CLEAN_UP_BOOM:	LDX#	0
+		LDA	J
+		SBA#	9
+		STA	J
+CLEAN_UP_LOOP:	LDA#	' '
+		OUTB*	J
+		INC	J
+		ADX#	1
+		CMX#	10
+		JLT	CLEAN_UP_LOOP
+		DEC	SUB_COUNT
+	     JMP	DONE_MOVING
+
+;--------------------------------------------------------------------------------------------------------------
+
+DELAY:    	.WORD 20000
+I:	.BLKW 1			; global temps
+J:	.BLKW 1
+SHIP_CURR_POS:	.BLKW 1
+TIMER:	.WORD	0
+SEED:	.WORD	0
+LEVEL_CNT:	.WORD	0
+SUB_LIMIT:	.WORD	0
+SUB_COUNT:	.WORD	0			; -(current alive subs)
+SCORE_CNT:	.WORD	0
+
+
+SCORE:	.CHAR	'Score: ', SCORE_LENGTH
+LEVEL:	.CHAR	'Level: ', LEVEL_LENGTH
+SHIP_ROW_ONE:	.CHAR	'  \\   O,', SHIP_ROW_ONE_LENGTH
+SHIP_ROW_TWO:	.CHAR	'\\___\\/ )__/', SHIP_ROW_TWO_LENGTH
+
+ONE_POINT_SUB_RIGHT:	.CHAR '<*****<', ONE_POINT_SUB_RIGHT_LENGTH	; slow speed sub
+ONE_POINT_SUB_LEFT:	.CHAR '>*****>', ONE_POINT_SUB_LEFT_LENGTH
+TWO_POINT_SUB_RIGHT:	.CHAR '<<<', TWO_POINT_SUB_RIGHT_LENGTH	; fast speed sub
+TWO_POINT_SUB_LEFT:	.CHAR '>>>', TWO_POINT_SUB_LEFT_LENGTH
+
+BLOW_UP_MSG:		.CHAR '=#$%&%$#=-', BOOM_LENGTH
+GAMEOVER_MSG:		.CHAR 'GAME OVER! YOU LOSE!', GAMEOVER_LENGTH
+
+EXPLOSION_1:	.CHAR '          _ ._  _ , _ ._         ', EXPLOSION_1_LENGTH
+EXPLOSION_2:	.CHAR '        (_ " ( `  )_  .__)       ', EXPLOSION_2_LENGTH
+EXPLOSION_3:	.CHAR '      ( (  (    )   `)  ) _)     ', EXPLOSION_3_LENGTH
+EXPLOSION_4:	.CHAR '     (__ (_   (_ . _) _) ,__)    ', EXPLOSION_4_LENGTH
+EXPLOSION_5:	.CHAR '         `~~`\\ " . /`~~`         ', EXPLOSION_5_LENGTH
+EXPLOSION_6:	.CHAR '              ;   ;              ', EXPLOSION_6_LENGTH
+EXPLOSION_7:	.CHAR '              /   \\              ', EXPLOSION_7_LENGTH
+EXPLOSION_8:	.CHAR '~~~~~~~~~~~~~/_ __ \\~~~~~~~~~~~~~', EXPLOSION_8_LENGTH
+
+;------------------------------------------------------------------------------------------------------------
+; setting up timer and keyboard ISR
+		.EQU 	@,$FFB
+		.WORD	TIMER_ISR
+
+		.EQU	@,$FF8
+		.WORD	KEYBD_ISR
+		.END
