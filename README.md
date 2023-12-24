@@ -1,2 +1,2 @@
 # Example-Code
-Codes I done in the past
+Codes I wrote in the past
